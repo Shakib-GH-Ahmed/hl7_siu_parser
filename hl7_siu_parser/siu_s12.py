@@ -95,6 +95,14 @@ def parse_siu_s12_appointment(msg: HL7Message) -> Dict[str, Any]:
         msg.get_component("SCH", 7, 2, default=""),
         msg.get_component("SCH", 7, 1, default=""),
         msg.get_field("SCH", 7, default=""),
+
+        msg.get_component("SCH", 8, 2, default=""),
+        msg.get_component("SCH", 8, 1, default=""),
+        msg.get_field("SCH", 8, default=""),
+
+        msg.get_component("SCH", 6, 2, default=""),
+        msg.get_component("SCH", 6, 1, default=""),
+        msg.get_field("SCH", 6, default=""),
     )
 
     return {
