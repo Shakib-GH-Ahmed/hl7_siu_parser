@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import re
 from datetime import datetime, date, timezone, timedelta
 
@@ -140,7 +140,6 @@ def parse_message(message: str) -> HL7Message:
         # Align fields with HL7 numbering conventions
         if name == "MSH":
             # Insert MSH-1 (field separator) at fields[1], keep encoding chars as fields[2]
-            # parts currently: ['MSH', '^~\\&', ...]
             fields = ["MSH", field_sep] + parts[1:]
         else:
             fields = parts  # fields[1] -> SEG-1
@@ -160,14 +159,13 @@ _ESCAPE_MAP_KEYS = {
 
 
 def unescape_hl7(value: str, seps: Separators) -> str:
-    """
+    r"""
     Basic HL7 unescape for \F\ \S\ \R\ \E\ \T\.
     This is intentionally small; enough for most scheduling fields.
     """
     if not value or seps.escape not in value:
         return value
 
-    # pattern like \F\
     esc = re.escape(seps.escape)
     pattern = re.compile(rf"{esc}(.+?){esc}")
 
@@ -176,7 +174,6 @@ def unescape_hl7(value: str, seps: Separators) -> str:
         if code in _ESCAPE_MAP_KEYS:
             key = _ESCAPE_MAP_KEYS[code]
             return getattr(seps, key)
-        # Leave unknown escape sequences as-is (defensive)
         return m.group(0)
 
     return pattern.sub(repl, value)
@@ -232,8 +229,7 @@ def parse_hl7_ts_to_datetime(value: str) -> Optional[datetime]:
     micro = 0
     frac = m.group("fraction")
     if frac:
-        # .123 -> 123000 microseconds (pad/truncate)
-        frac_digits = frac[1:]  # remove dot
+        frac_digits = frac[1:]
         frac_digits = (frac_digits + "000000")[:6]
         micro = int(frac_digits)
 
@@ -250,6 +246,5 @@ def parse_hl7_ts_to_datetime(value: str) -> Optional[datetime]:
 
 
 def to_iso8601_z(dt: datetime) -> str:
-    # Convert to UTC and format with Z
     dt_utc = dt.astimezone(timezone.utc)
     return dt_utc.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
