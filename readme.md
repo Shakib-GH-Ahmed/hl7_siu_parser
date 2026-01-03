@@ -104,3 +104,17 @@ HL7 TS is normalized to ISO 8601 UTC:
 * Missing `PID` / `PV1` results in missing/empty patient/provider fields; missing `SCH` fails because an appointment cannot be formed.
 
 * Basic HL7 escape sequences are supported (`\F\`, `\S\`, `\R\`, `\E\`, `\T\`).
+
+## (Optional) Run with Docker
+
+Build the image (from project root):
+```bash
+docker build -t hl7-siu-parser .
+
+* Run the parser:
+
+docker run --rm -v "${PWD}:/app" hl7-siu-parser python -m hl7_siu_parser.cli input.hl7
+
+* Run tests:
+
+docker run --rm -v "${PWD}:/app" hl7-siu-parser python -m unittest discover -s tests -p "test*.py" -q
