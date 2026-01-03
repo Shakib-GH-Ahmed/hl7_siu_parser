@@ -27,7 +27,7 @@ def main(argv: List[str]) -> int:
         try:
             msg = parse_message(raw_msg)
             appt = parse_siu_s12_appointment(msg)
-            print(json.dumps(appt, ensure_ascii=False))
+            print(json.dumps(appt, ensure_ascii=False, indent=2))
         except HL7Error as e:
             exit_code = 1
             err_obj = {"message_index": i, "error": type(e).__name__, "detail": str(e)}
