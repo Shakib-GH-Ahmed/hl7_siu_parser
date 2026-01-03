@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .hl7 import HL7Message, parse_hl7_date, parse_hl7_ts_to_datetime, to_iso8601_z
 from .exceptions import MissingSegment, UnsupportedMessageType
@@ -14,9 +14,8 @@ def _first_nonempty(*vals: str) -> str:
 
 
 def validate_siu_s12(msg: HL7Message) -> None:
-    # MSH-9 is message type (composite)
-    mt_1 = msg.get_component("MSH", 9, 1, default="")  # e.g., SIU
-    mt_2 = msg.get_component("MSH", 9, 2, default="")  # e.g., S12
+    mt_1 = msg.get_component("MSH", 9, 1, default="")
+    mt_2 = msg.get_component("MSH", 9, 2, default="")
     if (mt_1, mt_2) != ("SIU", "S12"):
         raw = msg.get_field("MSH", 9, default="")
         raise UnsupportedMessageType(f"Unsupported message type in MSH-9: '{raw}'")
@@ -28,7 +27,6 @@ def parse_siu_s12_appointment(msg: HL7Message) -> Dict[str, Any]:
     if "SCH" not in msg.segments:
         raise MissingSegment("Missing SCH segment (required for appointment).")
 
-    # Appointment ID: prefer SCH-1.1 (EI.1), fallback SCH-2.1
     appt_id = _first_nonempty(
         msg.get_component("SCH", 1, 1, default=""),
         msg.get_component("SCH", 2, 1, default=""),
@@ -36,8 +34,6 @@ def parse_siu_s12_appointment(msg: HL7Message) -> Dict[str, Any]:
         msg.get_field("SCH", 2, default=""),
     )
 
-    # Appointment start datetime:
-    # Commonly SCH-11 is TQ; component 4 is start datetime.
     dt_raw = _first_nonempty(
         msg.get_component("SCH", 11, 4, default=""),
         msg.get_component("SCH", 11, 1, default=""),
@@ -46,7 +42,7 @@ def parse_siu_s12_appointment(msg: HL7Message) -> Dict[str, Any]:
     dt_obj = parse_hl7_ts_to_datetime(dt_raw)
     appt_datetime_iso = to_iso8601_z(dt_obj) if dt_obj else ""
 
-    # Patient: PID can be missing; handle gracefully by empty strings
+    # Patient
     pid_present = "PID" in msg.segments
     patient_id = (
         _first_nonempty(
@@ -63,18 +59,28 @@ def parse_siu_s12_appointment(msg: HL7Message) -> Dict[str, Any]:
     dob = parse_hl7_date(dob_raw)
     gender = msg.get_field("PID", 8, default="") if pid_present else ""
 
-    # Provider: PV1 can be missing; handle gracefully
+    # Provider (robust fallback for malformed PV1)
     pv1_present = "PV1" in msg.segments
-    prov_id = msg.get_component("PV1", 7, 1, default="") if pv1_present else ""
-    prov_family = msg.get_component("PV1", 7, 2, default="") if pv1_present else ""
-    prov_given = msg.get_component("PV1", 7, 3, default="") if pv1_present else ""
-    prov_prefix = msg.get_component("PV1", 7, 6, default="") if pv1_present else ""
+    prov_id = ""
+    prov_name = ""
 
-    prov_name_parts = [p for p in [prov_prefix, prov_given, prov_family] if p]
-    prov_name = " ".join(prov_name_parts)
+    if pv1_present:
+        provider_field = None
+        for f in (7, 6, 8, 9):
+            if msg.get_field("PV1", f, default=""):
+                provider_field = f
+                break
 
-    # Location: prefer PV1-3 (Assigned Patient Location) then SCH-? best-effort
-    # PV1-3 is PL: point of care ^ room ^ bed ^ facility ...
+        if provider_field is not None:
+            prov_id = msg.get_component("PV1", provider_field, 1, default="")
+            prov_family = msg.get_component("PV1", provider_field, 2, default="")
+            prov_given = msg.get_component("PV1", provider_field, 3, default="")
+            prov_prefix = msg.get_component("PV1", provider_field, 6, default="")
+
+            prov_name_parts = [p for p in [prov_prefix, prov_given, prov_family] if p]
+            prov_name = " ".join(prov_name_parts)
+
+    # Location
     if pv1_present:
         loc_poc = msg.get_component("PV1", 3, 1, default="")
         loc_room = msg.get_component("PV1", 3, 2, default="")
@@ -84,7 +90,7 @@ def parse_siu_s12_appointment(msg: HL7Message) -> Dict[str, Any]:
     else:
         location = ""
 
-    # Reason: SCH-7 is commonly "Appointment Reason" (CE) -> prefer text (comp2), else identifier (comp1)
+    # Reason
     reason = _first_nonempty(
         msg.get_component("SCH", 7, 2, default=""),
         msg.get_component("SCH", 7, 1, default=""),
